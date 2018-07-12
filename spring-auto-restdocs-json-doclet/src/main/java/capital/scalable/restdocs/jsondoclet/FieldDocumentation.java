@@ -24,23 +24,29 @@ import static capital.scalable.restdocs.jsondoclet.DocletUtils.cleanupTagName;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.sun.javadoc.FieldDoc;
-import com.sun.javadoc.Tag;
+import javax.lang.model.element.Element;
+
+import com.sun.source.doctree.BlockTagTree;
+
+import jdk.javadoc.doclet.DocletEnvironment;
 
 public class FieldDocumentation {
 
-    private String comment;
-    private final Map<String, String> tags = new HashMap<>();
+	private String comment;
+	private final Map<String, String> tags = new HashMap<>();
 
-    public static FieldDocumentation fromFieldDoc(FieldDoc fieldDoc) {
-        FieldDocumentation fd = new FieldDocumentation();
-        fd.comment = fieldDoc.commentText();
+	public static FieldDocumentation fromFieldDoc(DocletEnvironment docEnv,
+			Element fieldElement) {
+		FieldDocumentation fd = new FieldDocumentation();
+		fd.comment = docEnv.getElementUtils().getDocComment(fieldElement);
 
-        for (Tag tag : fieldDoc.tags()) {
-            fd.tags.put(cleanupTagName(tag.name()), tag.text());
-        }
 
-        return fd;
-    }
+		docEnv.getDocTrees().getDocCommentTree(fieldElement).getBlockTags()
+				.forEach(tag -> fd.tags.put(
+						cleanupTagName(((BlockTagTree) tag).getTagName()),
+						tag.toString()));
+
+		return fd;
+	}
 
 }

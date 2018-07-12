@@ -22,40 +22,49 @@ package capital.scalable.restdocs.jsondoclet;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.sun.javadoc.ClassDoc;
-import com.sun.javadoc.FieldDoc;
-import com.sun.javadoc.MethodDoc;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+
+import jdk.javadoc.doclet.DocletEnvironment;
 
 public final class ClassDocumentation {
-    private String comment = "";
-    private final Map<String, FieldDocumentation> fields = new HashMap<>();
-    private final Map<String, MethodDocumentation> methods = new HashMap<>();
+	private String comment = "";
+	private final Map<String, FieldDocumentation> fields = new HashMap<>();
+	private final Map<String, MethodDocumentation> methods = new HashMap<>();
 
-    private ClassDocumentation() {
-        // enforce usage of static factory method
-    }
+	private ClassDocumentation() {
+		// enforce usage of static factory method
+	}
 
-    public static ClassDocumentation fromClassDoc(ClassDoc classDoc) {
-        ClassDocumentation cd = new ClassDocumentation();
-        cd.setComment(classDoc.commentText());
-        for (FieldDoc fieldDoc : classDoc.fields(false)) {
-            cd.addField(fieldDoc);
-        }
-        for (MethodDoc methodDoc : classDoc.methods(false)) {
-            cd.addMethod(methodDoc);
-        }
-        return cd;
-    }
+	public static ClassDocumentation fromClassDoc(DocletEnvironment docEnv,
+			Element element) {
+		ClassDocumentation cd = new ClassDocumentation();
+		cd.setComment(docEnv.getElementUtils().getDocComment(element));
 
-    private void setComment(String comment) {
-        this.comment = comment;
-    }
+		element.getEnclosedElements().forEach(fieldOrMethod -> {
+			if (fieldOrMethod.getKind().equals(ElementKind.FIELD)) {
+				cd.addField(docEnv, fieldOrMethod);
+			}
+			else if (fieldOrMethod.getKind().equals(ElementKind.METHOD)
+					|| fieldOrMethod.getKind().equals(ElementKind.CONSTRUCTOR)) {
+				cd.addMethod(docEnv, fieldOrMethod);
+			}
+		});
 
-    private void addField(FieldDoc fieldDoc) {
-        this.fields.put(fieldDoc.name(), FieldDocumentation.fromFieldDoc(fieldDoc));
-    }
+		return cd;
+	}
 
-    private void addMethod(MethodDoc methodDoc) {
-        this.methods.put(methodDoc.name(), MethodDocumentation.fromMethodDoc(methodDoc));
-    }
+	private void setComment(String comment) {
+		this.comment = comment;
+	}
+
+	private void addField(DocletEnvironment docEnv, Element element) {
+		this.fields.put(element.getSimpleName().toString(),
+				FieldDocumentation.fromFieldDoc(docEnv, element));
+	}
+
+	private void addMethod(DocletEnvironment docEnv, Element element) {
+		this.methods.put(element.getSimpleName().toString(),
+				MethodDocumentation.fromMethodDoc(docEnv, element));
+	}
 }

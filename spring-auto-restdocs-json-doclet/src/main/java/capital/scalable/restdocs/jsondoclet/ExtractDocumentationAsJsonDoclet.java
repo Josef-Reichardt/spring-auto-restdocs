@@ -28,75 +28,88 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import javax.lang.model.element.PackageElement;
+import javax.lang.model.element.TypeElement;
+
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.javadoc.ClassDoc;
-import com.sun.javadoc.RootDoc;
-import com.sun.tools.doclets.standard.Standard;
+
+import jdk.javadoc.doclet.DocletEnvironment;
+import jdk.javadoc.doclet.StandardDoclet;
 
 /**
  * Javadoc to JSON doclet.
  */
-public class ExtractDocumentationAsJsonDoclet extends Standard {
+public class ExtractDocumentationAsJsonDoclet extends StandardDoclet {
 
-    public static boolean start(RootDoc root) {
-        String destinationDir = destinationDir(root.options());
-        ObjectMapper mapper = createObjectMapper();
+	@Override
+	public boolean run(DocletEnvironment docEnv) {
 
-        for (ClassDoc classDoc : root.classes()) {
-            ClassDocumentation cd = ClassDocumentation.fromClassDoc(classDoc);
-            writeToFile(destinationDir, mapper, classDoc, cd);
-        }
-        return true;
-    }
+		// TODO:
+		// String destinationDir = DocPaths.SOURCE_OUTPUT
+		// .resolve("../generated-javadoc-json").getPath();
+		try {
+			String destinationDir = Files.createTempDirectory("generated-javadoc-json")
+					.toString();
+			ObjectMapper mapper = createObjectMapper();
 
-    private static String destinationDir(String[][] options) {
-        for (String[] os : options) {
-            String opt = os[0].toLowerCase();
-            if (opt.equals("-d")) {
-                return os[1];
-            }
-        }
-        return "../generated-javadoc-json";
-    }
+			docEnv.getElementUtils().getAllModuleElements()
+					.forEach(module -> module.getEnclosedElements().forEach(
+							pkg -> pkg.getEnclosedElements().forEach(classOrInterface -> {
+								writeToFile(destinationDir, mapper, (PackageElement) pkg,
+										(TypeElement) classOrInterface, ClassDocumentation
+												.fromClassDoc(docEnv, classOrInterface));
+							})));
 
-    private static void writeToFile(String destinationDir, ObjectMapper mapper,
-            ClassDoc classDoc, ClassDocumentation cd) {
-        try {
-            Path path = path(destinationDir, classDoc);
-            try (BufferedWriter writer = Files.newBufferedWriter(path, UTF_8)) {
-                mapper.writerFor(ClassDocumentation.class).writeValue(writer, cd);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new DocletAbortException("Error writing file: " + e);
-        }
-    }
+		}
+		catch (IOException e) {
+			throw new RuntimeException("error while creating temp dir: " + e.getMessage(),
+					e);
+		}
+		return true;
+	}
 
-    private static Path path(String destinationDir, ClassDoc classDoc) throws IOException {
-        String packageName = classDoc.containingPackage().name();
-        String packageDir = packageName.replace(".", File.separator);
-        Path packagePath = Paths.get(packageDir);
+	private static void writeToFile(String destinationDir, ObjectMapper mapper,
+			PackageElement packageElement, TypeElement classOrInterface,
+			ClassDocumentation cd) {
+		try {
+			Path path = path(destinationDir, packageElement, classOrInterface);
+			try (BufferedWriter writer = Files.newBufferedWriter(path, UTF_8)) {
+				mapper.writerFor(ClassDocumentation.class).writeValue(writer, cd);
+			}
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+			throw new DocletAbortException("Error writing file: " + e);
+		}
+	}
 
-        final Path path;
-        if (destinationDir != null) {
-            path = Paths.get(destinationDir).resolve(packageDir);
-        } else {
-            path = packagePath;
-        }
+	private static Path path(String destinationDir, PackageElement packageElement,
+			TypeElement classOrInterface) throws IOException {
+		String packageName = packageElement.getQualifiedName().toString();
+		String packageDir = packageName.replace(".", File.separator);
+		Path packagePath = Paths.get(packageDir);
 
-        Files.createDirectories(path);
+		final Path path;
+		if (destinationDir != null) {
+			path = Paths.get(destinationDir).resolve(packageDir);
+		}
+		else {
+			path = packagePath;
+		}
 
-        return path.resolve(classDoc.name() + ".json");
-    }
+		Files.createDirectories(path);
 
-    private static ObjectMapper createObjectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.setVisibility(mapper.getSerializationConfig().getDefaultVisibilityChecker()
-                .withFieldVisibility(JsonAutoDetect.Visibility.ANY)
-                .withGetterVisibility(JsonAutoDetect.Visibility.NONE)
-                .withSetterVisibility(JsonAutoDetect.Visibility.NONE)
-                .withCreatorVisibility(JsonAutoDetect.Visibility.NONE));
-        return mapper;
-    }
+		return path.resolve(classOrInterface.getSimpleName() + ".json");
+	}
+
+	private static ObjectMapper createObjectMapper() {
+		ObjectMapper mapper = new ObjectMapper();
+		mapper.setVisibility(mapper.getSerializationConfig().getDefaultVisibilityChecker()
+				.withFieldVisibility(JsonAutoDetect.Visibility.ANY)
+				.withGetterVisibility(JsonAutoDetect.Visibility.NONE)
+				.withSetterVisibility(JsonAutoDetect.Visibility.NONE)
+				.withCreatorVisibility(JsonAutoDetect.Visibility.NONE));
+		return mapper;
+	}
 }
